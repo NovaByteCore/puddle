@@ -4,6 +4,10 @@ import kotlin.math.roundToLong
 
 const val ML_PER_OZ = 29.5735
 
+const val MEDICAL_NOTE =
+    "Goals are general estimates, not medical advice. Ask your doctor how much to drink, " +
+        "especially if you're pregnant or have kidney, heart or other health conditions."
+
 data class DrinkType(val id: String, val name: String, val factor: Double, val color: Long)
 
 object Drinks {

@@ -76,6 +76,7 @@ fun SettingsScreen(store: Store, sum: Summary, tick: Int, requestNotif: () -> Un
                     Text("Use suggested goal: ${fmtWithUnit(suggested, unit)}")
                 }
             }
+            Text(MEDICAL_NOTE, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
 
         SettingsCard("Units") {

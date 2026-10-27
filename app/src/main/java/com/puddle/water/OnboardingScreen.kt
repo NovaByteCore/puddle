@@ -78,6 +78,13 @@ fun OnboardingScreen(onDone: (unit: String, goalMl: Double, weightLbs: Int, acti
             }
         }
 
+        Text(
+            MEDICAL_NOTE,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+
         Button(
             onClick = { onDone(unit, goal, if (lbs > 40) lbs else 150, activity) },
             modifier = Modifier.fillMaxWidth().height(56.dp),
