@@ -67,8 +67,8 @@ object Stats {
         val good = l.filter { it.drink.factor >= 0.95 }.sumOf { it.ml }
         val quality = if (raw <= 0) 0 else (good / raw * 15).roundToInt()
 
-        val start = s.startHour.toDouble()
-        val end = maxOf(s.endHour.toDouble(), start + 4)
+        val start = s.wakeStartMin / 60.0
+        val end = maxOf(if (s.wakeEndMin > s.wakeStartMin) s.wakeEndMin / 60.0 else 24.0, start + 4)
         val block = (end - start) / 4.0
         val now = LocalDateTime.now()
         val hoursNow = when {

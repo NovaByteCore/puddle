@@ -73,7 +73,7 @@ fun TodayScreen(store: Store, sum: Summary) {
     val level = (sum.todayEff / sum.goal).coerceIn(0.0, 1.0).toFloat()
 
     fun add(ml: Double) {
-        store.addDrink(ml, drink.id)
+        Hydration.log(ctx, ml, drink.id)
         Toast.makeText(ctx, "Added ${fmtWithUnit(ml, s.unit)} of ${drink.name.lowercase()}", Toast.LENGTH_SHORT).show()
     }
 
@@ -172,7 +172,7 @@ fun TodayScreen(store: Store, sum: Summary) {
                         )
                         Text(e.drink.name, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
                         Text(fmtWithUnit(e.ml, s.unit), fontWeight = FontWeight.Bold)
-                        IconButton(onClick = { store.removeEntry(e) }) {
+                        IconButton(onClick = { store.removeEntry(e); Scheduler.settingsChanged(ctx) }) {
                             Icon(Icons.Filled.Delete, contentDescription = "Remove", tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
@@ -182,30 +182,97 @@ fun TodayScreen(store: Store, sum: Summary) {
     }
 
     if (showCustom) {
-        val isOz = s.unit == "oz"
-        var value by remember { mutableFloatStateOf(if (isOz) 10f else 300f) }
-        AlertDialog(
-            onDismissRequest = { showCustom = false },
-            title = { Text("How much ${drink.name.lowercase()}?") },
-            text = {
-                Column {
-                    Text("${value.roundToInt()} ${s.unit}", fontSize = 32.sp, fontWeight = FontWeight.Black)
-                    Slider(
-                        value = value,
-                        onValueChange = { value = it },
-                        valueRange = if (isOz) 1f..64f else 50f..2000f,
-                        steps = if (isOz) 62 else 38,
-                    )
-                }
+        LogDrinkDialog(
+            unit = s.unit,
+            startDrinkId = drink.id,
+            onDismiss = { showCustom = false },
+            onLog = { ml, id ->
+                drinkId = id
+                Hydration.log(ctx, ml, id)
+                showCustom = false
+                Toast.makeText(ctx, "Added ${fmtWithUnit(ml, s.unit)} of ${Drinks.byId(id).name.lowercase()}", Toast.LENGTH_SHORT).show()
             },
-            confirmButton = {
-                TextButton(onClick = {
-                    add(if (isOz) value.roundToInt() * ML_PER_OZ else value.roundToInt().toDouble())
-                    showCustom = false
-                }) { Text("Add") }
-            },
-            dismissButton = { TextButton(onClick = { showCustom = false }) { Text("Cancel") } },
         )
+    }
+}
+
+/** Pick a drink and an amount. Used by the Other button, the banner and the Log water notification button. */
+@Composable
+fun LogDrinkDialog(unit: String, startDrinkId: String, onDismiss: () -> Unit, onLog: (ml: Double, drinkId: String) -> Unit) {
+    val isOz = unit == "oz"
+    var value by remember { mutableFloatStateOf(if (isOz) 8f else 250f) }
+    var id by remember { mutableStateOf(startDrinkId) }
+    val d = Drinks.byId(id)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Log a drink") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    items(Drinks.all, key = { it.id }) { x ->
+                        FilterChip(
+                            selected = x.id == id,
+                            onClick = { id = x.id },
+                            label = { Text(x.name) },
+                            leadingIcon = { Box(Modifier.size(10.dp).clip(CircleShape).background(Color(x.color))) },
+                        )
+                    }
+                }
+                Text("${value.roundToInt()} $unit of ${d.name.lowercase()}", fontSize = 26.sp, fontWeight = FontWeight.Black)
+                Slider(
+                    value = value,
+                    onValueChange = { value = it },
+                    valueRange = if (isOz) 1f..64f else 50f..2000f,
+                    steps = if (isOz) 62 else 38,
+                )
+                drinkNote(d)?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                onLog(if (isOz) value.roundToInt() * ML_PER_OZ else value.roundToInt().toDouble(), id)
+            }) { Text("Log it") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
+}
+
+/** Shown at the top of every tab until you drink. */
+@Composable
+fun ReminderBanner(s: Settings, onDrank: () -> Unit, onLog: () -> Unit, onSnooze: () -> Unit) {
+    val snoozed = s.snoozedUntil > System.currentTimeMillis()
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer,
+            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+        ),
+        shape = RoundedCornerShape(20.dp),
+        modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 8.dp),
+    ) {
+        Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                if (snoozed) "The llama is napping. Briefly." else LlamaLines.line(s.nagCount).first,
+                fontWeight = FontWeight.Black,
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Text(
+                when {
+                    snoozed -> "Snoozed until ${Scheduler.fmtTime(s.snoozedUntil)}. Log a drink to end this reminder."
+                    s.nagCount == 0 -> "Reminder sent at ${Scheduler.fmtTime(s.pendingSince)}. It stays until you drink."
+                    else -> "Waiting since ${Scheduler.fmtTime(s.pendingSince)} · follow-up ${s.nagCount}. It stays until you drink."
+                },
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = onDrank, modifier = Modifier.weight(1.3f)) {
+                    Text("I drank ${fmtWithUnit(s.quickAddMl, s.unit)}", maxLines = 1)
+                }
+                OutlinedButton(onClick = onLog, modifier = Modifier.weight(1f)) { Text("Other", maxLines = 1) }
+                if (!snoozed) {
+                    TextButton(onClick = onSnooze, modifier = Modifier.weight(1f)) { Text("${s.snoozeMin} min", maxLines = 1) }
+                }
+            }
+        }
     }
 }
 

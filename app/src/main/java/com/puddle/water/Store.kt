@@ -72,6 +72,8 @@ class Store private constructor(context: Context) {
         val seenArr = s.optJSONArray("seen")
         val seen = if (seenArr == null) d.seen
         else (0 until seenArr.length()).map { seenArr.getString(it) }.toSet() + "frog"
+        val oldStart = s.optInt("startHour", 8) * 60
+        val oldEnd = s.optInt("endHour", 21) * 60
         val settings = Settings(
             onboarded = s.optBoolean("onboarded", d.onboarded),
             unit = s.optString("unit", d.unit),
@@ -79,14 +81,24 @@ class Store private constructor(context: Context) {
             weightLbs = s.optInt("weightLbs", d.weightLbs),
             activity = s.optInt("activity", d.activity),
             remindersOn = s.optBoolean("remindersOn", d.remindersOn),
-            startHour = s.optInt("startHour", d.startHour),
-            endHour = s.optInt("endHour", d.endHour),
+            wakeStartMin = s.optInt("wakeStartMin", oldStart),
+            wakeEndMin = s.optInt("wakeEndMin", oldEnd),
+            quietOn = s.optBoolean("quietOn", d.quietOn),
+            quietStartMin = s.optInt("quietStartMin", d.quietStartMin),
+            quietEndMin = s.optInt("quietEndMin", d.quietEndMin),
             intervalMin = s.optInt("intervalMin", d.intervalMin),
-            smartSkip = s.optBoolean("smartSkip", d.smartSkip),
+            followUpMin = s.optInt("followUpMin", d.followUpMin),
+            snoozeMin = s.optInt("snoozeMin", d.snoozeMin),
+            tone = s.optString("tone", d.tone),
+            pausedUntil = s.optLong("pausedUntil", d.pausedUntil),
             quickAddMl = s.optDouble("quickAddMl", d.quickAddMl),
+            nextAt = s.optLong("nextAt", d.nextAt),
+            pendingSince = s.optLong("pendingSince", d.pendingSince),
+            nagCount = s.optInt("nagCount", d.nagCount),
+            lastNagAt = s.optLong("lastNagAt", d.lastNagAt),
+            snoozedUntil = s.optLong("snoozedUntil", d.snoozedUntil),
             activeCritter = s.optString("activeCritter", d.activeCritter),
             lastDrinkId = s.optString("lastDrinkId", d.lastDrinkId),
-            lastReminderAt = s.optLong("lastReminderAt", d.lastReminderAt),
             seen = seen,
         )
         val arr = o.optJSONArray("entries") ?: JSONArray()
@@ -106,14 +118,24 @@ class Store private constructor(context: Context) {
             .put("weightLbs", s.weightLbs)
             .put("activity", s.activity)
             .put("remindersOn", s.remindersOn)
-            .put("startHour", s.startHour)
-            .put("endHour", s.endHour)
+            .put("wakeStartMin", s.wakeStartMin)
+            .put("wakeEndMin", s.wakeEndMin)
+            .put("quietOn", s.quietOn)
+            .put("quietStartMin", s.quietStartMin)
+            .put("quietEndMin", s.quietEndMin)
             .put("intervalMin", s.intervalMin)
-            .put("smartSkip", s.smartSkip)
+            .put("followUpMin", s.followUpMin)
+            .put("snoozeMin", s.snoozeMin)
+            .put("tone", s.tone)
+            .put("pausedUntil", s.pausedUntil)
             .put("quickAddMl", s.quickAddMl)
+            .put("nextAt", s.nextAt)
+            .put("pendingSince", s.pendingSince)
+            .put("nagCount", s.nagCount)
+            .put("lastNagAt", s.lastNagAt)
+            .put("snoozedUntil", s.snoozedUntil)
             .put("activeCritter", s.activeCritter)
             .put("lastDrinkId", s.lastDrinkId)
-            .put("lastReminderAt", s.lastReminderAt)
             .put("seen", JSONArray(s.seen.toList()))
         val arr = JSONArray()
         for (e in st.entries) {

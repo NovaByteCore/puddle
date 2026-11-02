@@ -4,7 +4,9 @@ package com.puddle.water
 
 import android.Manifest
 import android.os.Build
+import android.content.Intent
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -24,18 +26,23 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 
 class MainActivity : ComponentActivity() {
     private val resumeTick = mutableIntStateOf(0)
+    private val openLog = mutableStateOf(false)
 
     private val notifLauncher =
-        registerForActivityResult(ActivityResultContracts.RequestPermission()) { resumeTick.intValue++ }
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) {
+            resumeTick.intValue++
+            Scheduler.tick(this)
+        }
 
     private fun requestNotifications() {
-        if (Build.VERSION.SDK_INT >= 33 && !Reminders.canNotify(this)) {
+        if (Build.VERSION.SDK_INT >= 33 && !Notifier.canNotify(this)) {
             notifLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
     }
@@ -43,22 +50,48 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        Reminders.ensureChannel(this)
-        Reminders.schedule(this)
+        Notifier.ensureChannels(this)
+        Scheduler.ensureSafetyNet(this)
+        handleIntent(intent)
         val store = Store.get(this)
         setContent {
             PuddleTheme {
                 Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                    PuddleApp(store, resumeTick.intValue) { requestNotifications() }
+                    PuddleApp(
+                        store = store,
+                        tick = resumeTick.intValue,
+                        openLog = openLog.value,
+                        onLogClosed = { openLog.value = false },
+                        requestNotif = { requestNotifications() },
+                    )
                 }
             }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleIntent(intent)
+    }
+
+    private fun handleIntent(i: Intent?) {
+        if (i != null && i.getBooleanExtra(EXTRA_LOG, false)) {
+            openLog.value = true
+            i.removeExtra(EXTRA_LOG)
         }
     }
 
     override fun onResume() {
         super.onResume()
         Store.get(this).reload()
+        // Opening the app never counts as drinking. This only catches up on anything that's due.
+        Scheduler.tick(this)
         resumeTick.intValue++
+    }
+
+    companion object {
+        const val EXTRA_LOG = "log_water"
     }
 }
 
@@ -106,22 +139,27 @@ fun PuddleTheme(content: @Composable () -> Unit) {
 }
 
 @Composable
-fun PuddleApp(store: Store, tick: Int, requestNotif: () -> Unit) {
+fun PuddleApp(store: Store, tick: Int, openLog: Boolean, onLogClosed: () -> Unit, requestNotif: () -> Unit) {
+    val ctx = LocalContext.current
     val st by store.state.collectAsState()
     val sum = remember(st, tick) { Summary(st) }
 
     if (!st.settings.onboarded) {
-        OnboardingScreen { unit, goal, weight, activity ->
-            store.settings {
-                it.copy(onboarded = true, unit = unit, goalMl = goal, weightLbs = weight, activity = activity,
-                    quickAddMl = quickAddChoicesMl(unit)[0])
-            }
-            requestNotif()
-        }
+        OnboardingScreen(store, tick, requestNotif)
         return
     }
 
     var tab by rememberSaveable { mutableIntStateOf(0) }
+    var logDialog by remember { mutableStateOf(false) }
+    LaunchedEffect(openLog) {
+        if (openLog) {
+            tab = 0
+            logDialog = true
+            onLogClosed()
+        }
+    }
+
+    val pending = st.settings.reminderPending
     val tabs = listOf(
         "Today" to Icons.Filled.Home,
         "History" to Icons.Filled.DateRange,
@@ -136,21 +174,54 @@ fun PuddleApp(store: Store, tick: Int, requestNotif: () -> Unit) {
                     NavigationBarItem(
                         selected = tab == i,
                         onClick = { tab = i },
-                        icon = { Icon(icon, contentDescription = label) },
+                        icon = {
+                            if (i == 0 && pending) {
+                                BadgedBox(badge = { Badge { Text("!") } }) { Icon(icon, contentDescription = "$label, reminder waiting") }
+                            } else {
+                                Icon(icon, contentDescription = label)
+                            }
+                        },
                         label = { Text(label) },
                     )
                 }
             }
         },
     ) { pad ->
-        Box(Modifier.padding(pad).fillMaxSize()) {
-            when (tab) {
-                0 -> TodayScreen(store, sum)
-                1 -> HistoryScreen(sum)
-                2 -> CrittersScreen(store, sum)
-                else -> SettingsScreen(store, sum, tick, requestNotif)
+        Column(Modifier.padding(pad).fillMaxSize()) {
+            if (pending) {
+                ReminderBanner(
+                    s = st.settings,
+                    onDrank = {
+                        val ml = st.settings.quickAddMl
+                        Hydration.log(ctx, ml, "water")
+                        Toast.makeText(ctx, "Logged ${fmtWithUnit(ml, st.settings.unit)}. The llama is pleased.", Toast.LENGTH_SHORT).show()
+                    },
+                    onLog = { tab = 0; logDialog = true },
+                    onSnooze = { Scheduler.snooze(ctx) },
+                )
+            }
+            Box(Modifier.weight(1f).fillMaxWidth()) {
+                when (tab) {
+                    0 -> TodayScreen(store, sum)
+                    1 -> HistoryScreen(sum)
+                    2 -> CrittersScreen(store, sum)
+                    else -> SettingsScreen(store, sum, tick, requestNotif)
+                }
             }
         }
+    }
+
+    if (logDialog) {
+        LogDrinkDialog(
+            unit = st.settings.unit,
+            startDrinkId = st.settings.lastDrinkId,
+            onDismiss = { logDialog = false },
+            onLog = { ml, id ->
+                Hydration.log(ctx, ml, id)
+                logDialog = false
+                Toast.makeText(ctx, "Added ${fmtWithUnit(ml, st.settings.unit)} of ${Drinks.byId(id).name.lowercase()}", Toast.LENGTH_SHORT).show()
+            },
+        )
     }
 
     val fresh = Critters.all.firstOrNull { it.id in sum.unlocked && it.id !in st.settings.seen }

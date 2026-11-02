@@ -45,17 +45,32 @@ data class Settings(
     val goalMl: Double = 64 * ML_PER_OZ,
     val weightLbs: Int = 150,
     val activity: Int = 1,
+    // Reminders
     val remindersOn: Boolean = true,
-    val startHour: Int = 8,
-    val endHour: Int = 21,
+    val wakeStartMin: Int = 8 * 60,
+    val wakeEndMin: Int = 21 * 60,
+    val quietOn: Boolean = false,
+    val quietStartMin: Int = 12 * 60,
+    val quietEndMin: Int = 13 * 60,
     val intervalMin: Int = 90,
-    val smartSkip: Boolean = true,
+    val followUpMin: Int = 10,
+    val snoozeMin: Int = 10,
+    val tone: String = "sound",
+    val pausedUntil: Long = 0L,
     val quickAddMl: Double = 8 * ML_PER_OZ,
+    // Reminder cycle state
+    val nextAt: Long = 0L,
+    val pendingSince: Long = 0L,
+    val nagCount: Int = 0,
+    val lastNagAt: Long = 0L,
+    val snoozedUntil: Long = 0L,
+    // Other
     val activeCritter: String = "frog",
     val lastDrinkId: String = "water",
-    val lastReminderAt: Long = 0L,
     val seen: Set<String> = setOf("frog"),
-)
+) {
+    val reminderPending: Boolean get() = pendingSince > 0L
+}
 
 data class AppState(
     val settings: Settings = Settings(),

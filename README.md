@@ -16,5 +16,9 @@ New versions install over the old one, and your drinks and critters stay.
 - Hydration score out of 100: amount (70), drink quality (15), pacing (15)
 - 8 original critters to unlock with streaks and challenges
 - History: 7-day chart, monthly calendar, streaks, drink breakdown
-- Smart reminders with "+ 8 oz" buttons right on the notification
+- Persistent reminders during your waking hours. A stubborn, friendly llama keeps following up
+  until you tap "I drank" or log a drink. Buttons: I drank, Log water, Remind me in 10 min
+- Next check-in is paced from what's left of your goal and your waking hours
+- Settings for check-in frequency, follow-up interval, waking and quiet hours, snooze length,
+  tone (sound, vibrate, silent), and pausing
 - All data stays in the app on your phone
