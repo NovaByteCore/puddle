@@ -9,6 +9,7 @@ import java.io.File
 
 /** Keeps everything in one small file inside the app's private storage. */
 class Store private constructor(context: Context) {
+    private val appContext = context.applicationContext
     private val file = File(context.filesDir, "puddle.json")
     private val tmp = File(context.filesDir, "puddle.json.tmp")
     private val _state = MutableStateFlow(load())
@@ -24,6 +25,7 @@ class Store private constructor(context: Context) {
         val next = change(_state.value)
         _state.value = next
         save(next)
+        WidgetUpdater.request(appContext)
     }
 
     fun settings(change: (Settings) -> Settings) = update { it.copy(settings = change(it.settings)) }

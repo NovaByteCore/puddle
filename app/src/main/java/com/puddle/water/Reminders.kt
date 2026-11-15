@@ -533,6 +533,7 @@ class SystemEventsReceiver : BroadcastReceiver() {
         Store.get(context).reload()
         Notifier.ensureChannels(context)
         Scheduler.tick(context)
+        WidgetUpdater.request(context)
     }
 }
 
@@ -541,6 +542,7 @@ class ReminderWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(c
     override suspend fun doWork(): Result {
         Store.get(applicationContext).reload()
         Scheduler.tick(applicationContext)
+        WidgetUpdater.request(applicationContext) // keeps the widget on the right day
         return Result.success()
     }
 }

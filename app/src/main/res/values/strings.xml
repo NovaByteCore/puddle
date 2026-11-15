@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">Puddle</string>
+    <string name="widget_name">Puddle jar</string>
+    <string name="widget_desc">Your critter\'s jar, today\'s water and a quick + button</string>
 </resources>
